@@ -2,7 +2,6 @@
 /*
 Copyright (c) 2009, Francisco Facioni
 All rights reserved.
-
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
     * Redistributions of source code must retain the above copyright
@@ -12,7 +11,6 @@ modification, are permitted provided that the following conditions are met:
       documentation and/or other materials provided with the distribution.
     * The names of its contributors may not be used to endorse or promote products
       derived from this software without specific prior written permission.
-
 THIS SOFTWARE IS PROVIDED BY Francisco Facioni ''AS IS'' AND ANY
 EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
 WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -24,9 +22,6 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-
-namespace PHPTrie;
-
 /**
  * Class Trie
  *
@@ -36,7 +31,7 @@ class Trie
 {
     private $trie = array();
     private $value = null;
-
+    static $print = false;
     /**
      * Trie constructor
      *
@@ -46,7 +41,6 @@ class Trie
     {
         $this->value = $value;
     }
-
     /**
      * Add value to the trie
      *
@@ -60,16 +54,15 @@ class Trie
             if (is_null($this->value) || $overWrite) {
                 $this->value = $value;
             }
-
             return;
         }
-
         foreach ($this->trie as $prefix => $trie) {
             $prefix = (string)$prefix;
-            $prefixLength = strlen($prefix);
-            $head = substr($string,0,$prefixLength);
-            $headLength = strlen($head);
-
+            $prefix_array = Trie::str_split_unicode($prefix,1);
+            $prefixLength = mb_strlen($prefix);
+            $head = mb_substr($string,0,$prefixLength);
+            $head_array = Trie::str_split_unicode($head,1);
+            $headLength = mb_strlen($head);
             $equals = true;
             $equalPrefix = "";
             for ($i= 0;$i<$prefixLength;++$i) {
@@ -77,63 +70,68 @@ class Trie
                 if ($i >= $headLength) {
                     $equalTrie = new Trie($value);
                     $this->trie[$equalPrefix] = $equalTrie;
-                    $equalTrie->trie[substr($prefix,$i)] = $trie;
+                    $equalTrie->trie[mb_substr($prefix,$i)] = $trie;
                     unset($this->trie[$prefix]);
-
                     return;
-                } elseif ($prefix[$i] != $head[$i]) {
+                } elseif ($prefix_array[$i] != $head_array[$i]) {
                     if ($i > 0) {
                         $equalTrie = new Trie();
                         $this->trie[$equalPrefix] = $equalTrie;
-                        $equalTrie->trie[substr($prefix,$i)] = $trie;
-                        $equalTrie->trie[substr($string,$i)] = new Trie($value);
+                        $equalTrie->trie[mb_substr($prefix,$i)] = $trie;
+                        $equalTrie->trie[mb_substr($string,$i)] = new Trie($value);
                         unset($this->trie[$prefix]);
-
                         return;
                     }
                     $equals = false;
                     break;
                 }
-
-                $equalPrefix .= $head[$i];
+                $equalPrefix .= $head_array[$i];
             }
-
             if ($equals) {
-                $trie->add(substr($string,$prefixLength),$value,$overWrite);
-
+                $trie->add(mb_substr($string,$prefixLength),$value,$overWrite);
                 return;
             }
         }
-
         $this->trie[$string] = new Trie($value);
     }
-
     /**
      * Search the Trie with a string
      *
      * @param $string The string search
      *
+     * @param $user_call boolean is the method call by user
      * @return mixed The value
      */
-    public function search($string)
+    public function search($string,$user_call=true)
     {
         if (empty($string)) {
             return $this->value;
         }
-
         foreach ($this->trie as $prefix => $trie) {
             $prefix = (string)$prefix;
-            $prefixLength = strlen($prefix);
-            $head = substr($string,0,$prefixLength);
+            $prefixLength = mb_strlen($prefix);
 
+            //add by bandit
+            $working_string = $string;
+            if($user_call ) {
+                if(($start = mb_stripos($string,$prefix)) !==false){
+                    $working_string = mb_substr($string, $start);
+                }else{
+                    continue;
+                }
+
+            }
+
+            $head = mb_substr($working_string,0,$prefixLength);
             if ($head === $prefix) {
-                return $trie->search(substr($string,$prefixLength));
+                $ret =  $trie->search(mb_substr($working_string,$prefixLength),false);
+
+                //add by bandit
+                if($ret){return $ret;}
             }
         }
-
-        return null;
+        return $this->value;
     }
-
     /**
      * Search with multiple keys
      *
@@ -146,19 +144,16 @@ class Trie
     {
         $size = count($array);
         $value = null;
-
         for ($j=0;$j<$size;++$j) {
             $trie = $this;
             $delim = '';
             $key = '';
-
             for ($i=$j;$i<$size;++$i) {
                 $key .= $delim.$array[$i];
                 $ret = $trie->searchTrie($key);
                 if (is_null($ret)) {
                     break;
                 }
-
                 $trie = $ret[1];
                 $key = $ret[0];
                 $delim = $delimeter;
@@ -166,41 +161,34 @@ class Trie
                     $value = $trie->value;
                 }
             }
-
             if (!is_null($value)) {
                 return $value;
             }
         }
-
         return null;
     }
-
     private function searchTrie($string)
     {
         if (empty($string)) {
             return array($string,$this);
         }
-
-        $stringLength = strlen($string);
+        $stringLength = mb_strlen($string);
         foreach ($this->trie as $prefix => $trie) {
             $prefix = (string)$prefix;
-            $prefixLength = strlen($prefix);
+            $prefixLength = mb_strlen($prefix);
             if ($prefixLength > $stringLength) {
-                $prefix = substr($prefix,0,$stringLength);
+                $prefix = mb_substr($prefix,0,$stringLength);
                 if ($prefix === $string) {
                     return array($string,$this);
                 }
             }
-            $head = substr($string,0,$prefixLength);
-
+            $head = mb_substr($string,0,$prefixLength);
             if ($head === $prefix) {
-                return $trie->searchTrie(substr($string,$prefixLength));
+                return $trie->searchTrie(mb_substr($string,$prefixLength));
             }
         }
-
         return null;
     }
-
     public static function __set_state($state)
     {
         $t = new self;
@@ -208,4 +196,9 @@ class Trie
         $t->value = $state['value'];
         return $t;
     }
+
+    public static function str_split_unicode($str, $l = 0){
+        return preg_split('/(.{'.$l.'})/us', $str, -1, PREG_SPLIT_NO_EMPTY|PREG_SPLIT_DELIM_CAPTURE);
+    }
+
 }
