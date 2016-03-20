@@ -33,13 +33,16 @@ class Trie
     private $trie = array();
     private $value = null;
     static $print = false;
+    private $delete_punctuation = false;
     /**
      * Trie constructor
      *
      * @param mixed $value This is for internal use
+     * @param boolean $delete_punctuation Delete punctuation before build index
      */
-    public function __construct($value = null)
+    public function __construct($value = null,$delete_punctuation=false)
     {
+        $this->delete_punctuation = $delete_punctuation;
         $this->value = $value;
     }
     /**
@@ -57,6 +60,13 @@ class Trie
             }
             return;
         }
+
+        if($this->delete_punctuation){
+            $reg = "/[[:punct:]]/i";
+            $string =  preg_replace($reg, '', $string);
+        }
+        $string = strtolower($string);
+
         foreach ($this->trie as $prefix => $trie) {
             $prefix = (string)$prefix;
             $prefix_array = Trie::str_split_unicode($prefix,1);
@@ -100,35 +110,54 @@ class Trie
      *
      * @param $string The string search
      *
-     * @param $user_call boolean is the method call by user
+     * @param $search_in boolean search words in string not just eque
      * @return mixed The value
      */
-    public function search($string,$user_call=true)
+    public function search($string,$search_in=true)
     {
         if (empty($string)) {
             return $this->value;
         }
+        $string = strtolower($string);
+
         foreach ($this->trie as $prefix => $trie) {
             $prefix = (string)$prefix;
             $prefixLength = mb_strlen($prefix);
 
             //add by bandit
+
+
             $working_string = $string;
-            if($user_call ) {
-                if(($start = mb_stripos($string,$prefix)) !==false){
-                    $working_string = mb_substr($string, $start);
-                }else{
-                    continue;
+            if($search_in ) {
+                if($this->delete_punctuation){
+                    $working_string = Trie::filter_mark($working_string);
                 }
 
-            }
+                if(($start = mb_stripos($working_string,$prefix)) ===false){
+                    continue;
+                }
+                //deal with 我是李李洪志
+                while(is_int($start)){
+                    $working_string = mb_substr($working_string, $start);
+                    $head = mb_substr($working_string,0,$prefixLength);
+                    if ($head === $prefix) {
+                        $ret =  $trie->search(mb_substr($working_string,$prefixLength),false);
+                        //add by bandit
+                        if($ret){return $ret;}
+                    }
+                    $start = mb_stripos($working_string,$prefix);
+                    if($start !==false){
+                        $start +=$prefixLength;
+                    }
+                }
+            }else{
+                $head = mb_substr($working_string,0,$prefixLength);
+                if ($head === $prefix) {
+                    $ret =  $trie->search(mb_substr($working_string,$prefixLength),false);
 
-            $head = mb_substr($working_string,0,$prefixLength);
-            if ($head === $prefix) {
-                $ret =  $trie->search(mb_substr($working_string,$prefixLength),false);
-
-                //add by bandit
-                if($ret){return $ret;}
+                    //add by bandit
+                    if($ret){return $ret;}
+                }
             }
         }
         return $this->value;
@@ -202,4 +231,12 @@ class Trie
         return preg_split('/(.{'.$l.'})/us', $str, -1, PREG_SPLIT_NO_EMPTY|PREG_SPLIT_DELIM_CAPTURE);
     }
 
+    public static function filter_mark($text){
+        if(trim($text)=='')return '';
+        $text =  preg_replace("/[[:punct:]]/i", '', $text);
+        $text=urlencode($text);
+        $text=preg_replace("/(%7E|%60|%21|%40|%23|%24|%25|%5E|%26|%27|%2A|%28|%29|%2B|%7C|%5C|%3D|\-|_|%5B|%5D|%7D|%7B|%3B|%22|%3A|%3F|%3E|%3C|%2C|\.|%2F|%A3%BF|%A1%B7|%A1%B6|%A1%A2|%A1%A3|%A3%AC|%7D|%A1%B0|%A3%BA|%A3%BB|%A1%AE|%A1%AF|%A1%B1|%A3%FC|%A3%BD|%A1%AA|%A3%A9|%A3%A8|%A1%AD|%A3%A4|%A1%A4|%A3%A1|%E3%80%82|%EF%BC%81|%EF%BC%8C|%EF%BC%9B|%EF%BC%9F|%EF%BC%9A|%E3%80%81|%E2%80%A6%E2%80%A6|%E2%80%9D|%E2%80%9C|%E2%80%98|%E2%80%99|%EF%BD%9E|%EF%BC%8E|%EF%BC%88)+/",'',$text);
+        $text=urldecode($text);
+        return trim($text);
+    }
 }
