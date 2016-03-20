@@ -27,6 +27,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * @package PHPTrie
  */
+namespace PHPTrie;
 class Trie
 {
     private $trie = array();
